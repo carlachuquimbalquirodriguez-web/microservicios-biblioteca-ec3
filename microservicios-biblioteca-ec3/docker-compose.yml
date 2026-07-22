@@ -1,0 +1,151 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: ec3-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    networks: [biblioteca-net]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.0
+    container_name: ec3-keycloak
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: mysql
+      KC_DB_URL: jdbc:mysql://mysql:3306/keycloak_db
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak123
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8090:8080"
+      - "9000:9000"
+    volumes:
+      - ./docker/keycloak/biblioteca-realm.json:/opt/keycloak/data/import/biblioteca-realm.json:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [biblioteca-net]
+
+  eureka-server:
+    build:
+      context: .
+      dockerfile: eureka-server/Dockerfile
+    container_name: ec3-eureka-server
+    restart: unless-stopped
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    networks: [biblioteca-net]
+
+  config-server:
+    build:
+      context: .
+      dockerfile: config-server/Dockerfile
+    container_name: ec3-config-server
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8888/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    networks: [biblioteca-net]
+
+  libros-service:
+    build:
+      context: .
+      dockerfile: libros-service/Dockerfile
+    container_name: ec3-libros-service
+    restart: unless-stopped
+    environment:
+      CONFIG_SERVER_URL: http://config-server:8888
+      EUREKA_URL: http://eureka-server:8761/eureka/
+      DB_URL: jdbc:mysql://mysql:3306/libros_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: biblioteca
+      DB_PASSWORD: biblioteca123
+      KEYCLOAK_ISSUER: http://localhost:8090/realms/biblioteca
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/biblioteca/protocol/openid-connect/certs
+    ports:
+      - "8081:8081"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
+    networks: [biblioteca-net]
+
+  prestamos-service:
+    build:
+      context: .
+      dockerfile: prestamos-service/Dockerfile
+    container_name: ec3-prestamos-service
+    restart: unless-stopped
+    environment:
+      CONFIG_SERVER_URL: http://config-server:8888
+      EUREKA_URL: http://eureka-server:8761/eureka/
+      DB_URL: jdbc:mysql://mysql:3306/prestamos_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: biblioteca
+      DB_PASSWORD: biblioteca123
+      KEYCLOAK_ISSUER: http://localhost:8090/realms/biblioteca
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/biblioteca/protocol/openid-connect/certs
+    ports:
+      - "8082:8082"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      libros-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
+    networks: [biblioteca-net]
+
+volumes:
+  mysql_data:
+
+networks:
+  biblioteca-net:
+    driver: bridge

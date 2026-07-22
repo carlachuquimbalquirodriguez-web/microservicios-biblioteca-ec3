@@ -1,0 +1,430 @@
+{
+  "info": {
+    "name": "EC3 Biblioteca - Libros y Préstamos",
+    "description": "Colección completa para demostrar OAuth2 con Keycloak, CRUD de libros y comunicación OpenFeign entre préstamos-service y libros-service.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "keycloak_url",
+      "value": "http://localhost:8090"
+    },
+    {
+      "key": "libros_url",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "prestamos_url",
+      "value": "http://localhost:8082"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "libro_id",
+      "value": ""
+    },
+    {
+      "key": "prestamo_id",
+      "value": ""
+    },
+    {
+      "key": "fecha_limite",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Autenticación Keycloak",
+      "item": [
+        {
+          "name": "Obtener token ADMIN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": "{{keycloak_url}}/realms/biblioteca/protocol/openid-connect/token",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "client_id",
+                  "value": "biblioteca-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "admin",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "admin123",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Token obtenido', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set('access_token', data.access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Obtener token USER",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": "{{keycloak_url}}/realms/biblioteca/protocol/openid-connect/token",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "client_id",
+                  "value": "biblioteca-postman",
+                  "type": "text"
+                },
+                {
+                  "key": "grant_type",
+                  "value": "password",
+                  "type": "text"
+                },
+                {
+                  "key": "username",
+                  "value": "usuario",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "usuario123",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Token obtenido', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('access_token', pm.response.json().access_token);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Infraestructura",
+      "item": [
+        {
+          "name": "Eureka - aplicaciones registradas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "http://localhost:8761/eureka/apps"
+          }
+        },
+        {
+          "name": "Config Server - libros-service",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://localhost:8888/libros-service/default"
+          }
+        },
+        {
+          "name": "Health libros-service",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{libros_url}}/actuator/health"
+          }
+        },
+        {
+          "name": "Health prestamos-service",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{prestamos_url}}/actuator/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Libros",
+      "item": [
+        {
+          "name": "Crear libro (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{libros_url}}/api/libros",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isbn\": \"978-612-0000-01-1\",\n  \"titulo\": \"Clean Code\",\n  \"autor\": \"Robert C. Martin\",\n  \"categoria\": \"Programación\",\n  \"anioPublicacion\": 2008\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Libro creado', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('libro_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar libros",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{libros_url}}/api/libros"
+          }
+        },
+        {
+          "name": "Buscar libro",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{libros_url}}/api/libros/{{libro_id}}"
+          }
+        },
+        {
+          "name": "Actualizar libro (ADMIN)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{libros_url}}/api/libros/{{libro_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isbn\": \"978-612-0000-01-1\",\n  \"titulo\": \"Clean Code - Código Limpio\",\n  \"autor\": \"Robert C. Martin\",\n  \"categoria\": \"Ingeniería de software\",\n  \"anioPublicacion\": 2008\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Préstamos y comunicación Feign",
+      "item": [
+        {
+          "name": "Crear préstamo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{prestamos_url}}/api/prestamos",
+            "description": "Esta petición demuestra la comunicación: prestamos-service consulta y actualiza libros-service mediante OpenFeign.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"libroId\": {{libro_id}},\n  \"lectorNombre\": \"Carlos Pérez\",\n  \"lectorDocumento\": \"76543210\",\n  \"fechaLimite\": \"{{fecha_limite}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const fecha = new Date();",
+                  "fecha.setDate(fecha.getDate() + 7);",
+                  "pm.collectionVariables.set('fecha_limite', fecha.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Préstamo creado', () => pm.response.to.have.status(201));",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set('prestamo_id', data.id);",
+                  "pm.test('Libro quedó no disponible', () => pm.expect(data.libro.disponible).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar préstamos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{prestamos_url}}/api/prestamos"
+          }
+        },
+        {
+          "name": "Buscar préstamo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{prestamos_url}}/api/prestamos/{{prestamo_id}}"
+          }
+        },
+        {
+          "name": "Verificar libro no disponible",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{libros_url}}/api/libros/{{libro_id}}"
+          }
+        },
+        {
+          "name": "Registrar devolución",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{prestamos_url}}/api/prestamos/{{prestamo_id}}/devolucion"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Devolución registrada', () => pm.response.to.have.status(200));",
+                  "pm.test('Estado DEVUELTO', () => pm.expect(pm.response.json().estado).to.eql('DEVUELTO'));",
+                  "pm.test('Libro liberado', () => pm.expect(pm.response.json().libro.disponible).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verificar libro disponible",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{libros_url}}/api/libros/{{libro_id}}"
+          }
+        }
+      ]
+    }
+  ]
+}
